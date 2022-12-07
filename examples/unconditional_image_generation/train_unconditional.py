@@ -449,7 +449,7 @@ def main(args):
                     accelerator.get_tracker("extended_wandb").log_images(epoch, global_step, images_processed)
 
                 if args.logger == "tensorboard":
-                    accelerator.get_tracker("tensorboard").writer.add_images(
+                    accelerator.get_tracker("tensorboard").add_images(
                         "test_samples", images_processed.transpose(0, 3, 1, 2), epoch
                     )
 
