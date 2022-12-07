@@ -26,7 +26,7 @@ from torchvision.transforms import (
     ToTensor,
 )
 from tqdm.auto import tqdm
-from tracking import GeneralExtendedTracker, ExtendedWandBTracker
+from tracking import ExtendedWandBTracker
 
 
 # Will error if the minimal version of diffusers is not installed. Remove at your own risks.
