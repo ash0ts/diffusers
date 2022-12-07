@@ -23,6 +23,10 @@ class ExtendedWandBTracker(WandBTracker):
     def __init__(self, run_name, **kwargs):
         super().__init__(run_name, **kwargs)
 
+    @property
+    def tracker(self):
+        return self
+
     def log_images(self, epoch: int, global_step: int, images_processed: list):
         wandb_images = [wandb.Image(i) for i in images_processed]
         self.wandb_table.add_data(epoch, global_step, wandb_images)

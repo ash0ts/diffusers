@@ -47,11 +47,11 @@ def get_full_repo_name(model_id: str, organization: Optional[str] = None, token:
 
 def main(args):
     logging_dir = os.path.join(args.output_dir, args.logging_dir)
-    log_with = args.logger.copy()
+    log_with = args.logger
     run = os.path.split(__file__)[-1].split(".")[0]
     project_name = f"{run}-{args.output_dir}"
     if args.logger == "wandb":
-        log_with = ExtendedWandBTracker(project_name, {"config": vars(args)})
+        log_with = ExtendedWandBTracker(project_name, **{"config": vars(args)})
     accelerator = Accelerator(
         gradient_accumulation_steps=args.gradient_accumulation_steps,
         mixed_precision=args.mixed_precision,
@@ -153,8 +153,7 @@ def main(args):
             os.makedirs(args.output_dir, exist_ok=True)
 
     if accelerator.is_main_process:
-        if args.logger == "tensorboard":
-            accelerator.init_trackers(run)
+        accelerator.init_trackers(run)
 
     global_step = 0
     for epoch in range(args.num_epochs):
