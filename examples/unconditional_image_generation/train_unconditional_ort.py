@@ -26,6 +26,7 @@ from torchvision.transforms import (
     ToTensor,
 )
 from tqdm.auto import tqdm
+from tracking import GeneralExtendedTracker, ExtendedWandBTracker
 
 
 # Will error if the minimal version of diffusers is not installed. Remove at your own risks.
@@ -49,7 +50,7 @@ def main(args):
     accelerator = Accelerator(
         gradient_accumulation_steps=args.gradient_accumulation_steps,
         mixed_precision=args.mixed_precision,
-        log_with="tensorboard",
+        log_with=args.logger,
         logging_dir=logging_dir,
     )
 
@@ -148,7 +149,13 @@ def main(args):
 
     if accelerator.is_main_process:
         run = os.path.split(__file__)[-1].split(".")[0]
-        accelerator.init_trackers(run)
+        project_name = f"{run}-{args.output_dir}"
+        tracker = GeneralExtendedTracker()
+        if logger == "wandb":
+            accelerator.init_trackers(project_name=project_name, init_kwargs={"wandb": {"config": vars(args)}})
+            tracker = ExtendedWandBTracker(accelerator.get_tracker("wandb"))
+        else:
+            accelerator.init_trackers(run)
 
     global_step = 0
     for epoch in range(args.num_epochs):
@@ -210,6 +217,9 @@ def main(args):
 
                 # denormalize the images and save to tensorboard
                 images_processed = (images * 255).round().astype("uint8")
+
+                tracker.log_images(epoch, global_step, images_processed)
+
                 accelerator.trackers[0].writer.add_images(
                     "test_samples", images_processed.transpose(0, 3, 1, 2), epoch
                 )
@@ -217,10 +227,14 @@ def main(args):
             if epoch % args.save_model_epochs == 0 or epoch == args.num_epochs - 1:
                 # save the model
                 pipeline.save_pretrained(args.output_dir)
+
+                tracker.log_model(epoch, global_step, args.output_dir)
+
                 if args.push_to_hub:
                     repo.push_to_hub(commit_message=f"Epoch {epoch}", blocking=False)
         accelerator.wait_for_everyone()
 
+    tracker.finalize()
     accelerator.end_training()
 
 
@@ -256,6 +270,16 @@ if __name__ == "__main__":
     parser.add_argument("--hub_token", type=str, default=None)
     parser.add_argument("--hub_model_id", type=str, default=None)
     parser.add_argument("--hub_private_repo", action="store_true")
+    parser.add_argument(
+        "--logger",
+        type=str,
+        default="tensorboard",
+        choices=["tensorboard", "wandb"],
+        help=(
+            "Whether to use [tensorboard](https://www.tensorflow.org/tensorboard) or [wandb](https://www.wandb.ai)"
+            " for experiment tracking and logging of model metrics and model checkpoints"
+        ),
+    )
     parser.add_argument("--logging_dir", type=str, default="logs")
     parser.add_argument(
         "--mixed_precision",
