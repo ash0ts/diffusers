@@ -1,38 +1,12 @@
 # Based on https://github.com/huggingface/accelerate/blob/d2e804f69d904db237d8ebdbcdc0d00fb52731ab/src/accelerate/tracking.py
 from accelerate.utils.imports import is_wandb_available
+from accelerate.tracking import WandBTracker
 
 if is_wandb_available():
     import wandb
 
 
-class GeneralExtendedTracker:
-    """
-    An extended Tracker class to be used for supplemental logging integration implementations.
-    """
-
-    @abstractmethod
-    def log_images(self, epoch: int, global_step: int, images_processed: list):
-        """
-        Should log a list of images to provided tracking API
-        """
-        pass
-
-    @abstractmethod
-    def log_model(self, epoch: int, global_step: int, model_dir):
-        """
-        Should log the contents of a directory containing saved model assets to provided tracking API
-        """
-        pass
-
-    @abstractproperty
-    def finalize(self):
-        """
-        Should flush any internal dataclasses such as tables to provided tracking API
-        """
-        pass
-
-
-class ExtendedWandBTracker(GeneralExtendedTracker):
+class ExtendedWandBTracker(WandBTracker):
     """
     A `Tracker` class that extends support for `wandb`. Should inherit the tracker from accelerate
     Args:
@@ -42,10 +16,12 @@ class ExtendedWandBTracker(GeneralExtendedTracker):
             Additional key word arguments.
     """
 
+    name = "extended_wandb"
+    requires_logging_directory = False
     wandb_table = wandb.Table(columns=["epoch", "global_step", "generated_images"])
 
-    def __init__(self, run, **kwargs):
-        self.run = run
+    def __init__(self, run_name, **kwargs):
+        super().__init__(run_name, **kwargs)
 
     def log_images(self, epoch: int, global_step: int, images_processed: list):
         wandb_images = [wandb.Image(i) for i in images_processed]

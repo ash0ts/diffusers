@@ -26,7 +26,7 @@ from torchvision.transforms import (
     ToTensor,
 )
 from tqdm.auto import tqdm
-from tracking import GeneralExtendedTracker, ExtendedWandBTracker
+from tracking import ExtendedWandBTracker
 
 
 # Will error if the minimal version of diffusers is not installed. Remove at your own risks.
@@ -240,10 +240,15 @@ def get_full_repo_name(model_id: str, organization: Optional[str] = None, token:
 
 def main(args):
     logging_dir = os.path.join(args.output_dir, args.logging_dir)
+    log_with = args.logger.copy()
+    run = os.path.split(__file__)[-1].split(".")[0]
+    project_name = f"{run}-{args.output_dir}"
+    if args.logger == "wandb":
+        log_with = ExtendedWandBTracker(project_name, {"config": vars(args)})
     accelerator = Accelerator(
         gradient_accumulation_steps=args.gradient_accumulation_steps,
         mixed_precision=args.mixed_precision,
-        log_with=args.logger,
+        log_with=log_with,
         logging_dir=logging_dir,
     )
 
@@ -358,13 +363,7 @@ def main(args):
             os.makedirs(args.output_dir, exist_ok=True)
 
     if accelerator.is_main_process:
-        run = os.path.split(__file__)[-1].split(".")[0]
-        project_name = f"{run}-{args.output_dir}"
-        tracker = GeneralExtendedTracker()
-        if logger == "wandb":
-            accelerator.init_trackers(project_name=project_name, init_kwargs={"wandb": {"config": vars(args)}})
-            tracker = ExtendedWandBTracker(accelerator.get_tracker("wandb"))
-        else:
+        if args.logger == "tensorboard":
             accelerator.init_trackers(run)
 
     global_step = 0
@@ -447,23 +446,26 @@ def main(args):
                 # denormalize the images and save to tensorboard
                 images_processed = (images * 255).round().astype("uint8")
 
-                tracker.log_images(epoch, global_step, images_processed)
+                if args.logger == "wandb":
+                    accelerator.get_tracker("extended_wandb").log_images(epoch, global_step, images_processed)
 
-                accelerator.trackers[0].writer.add_images(
-                    "test_samples", images_processed.transpose(0, 3, 1, 2), epoch
-                )
+                if args.logger == "tensorboard":
+                    accelerator.get_tracker("tensorboard").writer.add_images(
+                        "test_samples", images_processed.transpose(0, 3, 1, 2), epoch
+                    )
 
             if epoch % args.save_model_epochs == 0 or epoch == args.num_epochs - 1:
                 # save the model
                 pipeline.save_pretrained(args.output_dir)
-
-                tracker.log_model(epoch, global_step, args.output_dir)
+                if args.logger == "wandb":
+                    accelerator.get_tracker("extended_wandb").log_model(epoch, global_step, args.output_dir)
 
                 if args.push_to_hub:
                     repo.push_to_hub(commit_message=f"Epoch {epoch}", blocking=False)
         accelerator.wait_for_everyone()
 
-    tracker.finalize()
+    if args.logger == "wandb":
+        accelerator.get_tracker("extended_wandb").finalize()
     accelerator.end_training()
 
 
